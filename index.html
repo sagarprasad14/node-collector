@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Location Collector</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <style>
+    body { font-family: Arial; max-width: 500px; margin: auto; padding: 20px; }
+    input, button { width: 100%; padding: 10px; margin: 8px 0; }
+    input[readonly] { background: #f2f2f2; }
+    button { background: #2e7d32; color: white; border: none; }
+  </style>
+</head>
+<body>
+
+<h3>Location Details</h3>
+
+<input id="name" placeholder="Name">
+<input id="nodeId" placeholder="Node ID">
+
+<button onclick="getLocation()">📍 Use My Location</button>
+
+<input id="lat" placeholder="Latitude" readonly>
+<input id="lon" placeholder="Longitude" readonly>
+<input id="city" placeholder="City" readonly>
+<input id="state" placeholder="State" readonly>
+<input id="pincode" placeholder="Pincode" readonly>
+
+<button onclick="submitData()">Submit</button>
+
+<script>
+/* ========= CONFIG ========= */
+const GITHUB_TOKEN = "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";
+const OWNER = "sagarprasad14";
+const REPO = "location-form";
+const FILE_PATH = "data/locations.csv";
+const BRANCH = "main";
+/* ========================== */
+
+let locationReady = false;
+
+function getLocation() {
+  navigator.geolocation.getCurrentPosition(async pos => {
+    const lat = pos.coords.latitude;
+    const lon = pos.coords.longitude;
+
+    document.getElementById("lat").value = lat;
+    document.getElementById("lon").value = lon;
+
+    const res = await fetch(
+      `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}`
+    );
+    const data = await res.json();
+
+    document.getElementById("city").value =
+      data.address.city || data.address.town || data.address.village || "";
+    document.getElementById("state").value = data.address.state || "";
+    document.getElementById("pincode").value = data.address.postcode || "";
+
+    locationReady = true;
+    alert("Location captured");
+  });
+}
+
+async function submitData() {
+  if (!locationReady) {
+    alert("Capture location first");
+    return;
+  }
+
+  const row = [
+    new Date().toISOString(),
+    document.getElementById("name").value,
+    document.getElementById("nodeId").value,
+    document.getElementById("lat").value,
+    document.getElementById("lon").value,
+    document.getElementById("city").value,
+    document.getElementById("state").value,
+    document.getElementById("pincode").value,
+    navigator.userAgent
+  ].map(v => `"${String(v).replace(/"/g, '""')}"`).join(",");
+
+  const apiUrl = `https://api.github.com/repos/${OWNER}/${REPO}/contents/${FILE_PATH}`;
+
+  /* 1️⃣ Get existing file */
+  const fileRes = await fetch(apiUrl, {
+    headers: {
+      Authorization: `Bearer ${GITHUB_TOKEN}`,
+      Accept: "application/vnd.github+json"
+    }
+  });
+  const fileData = await fileRes.json();
+
+  const existingContent = atob(fileData.content.replace(/\n/g, ""));
+  const updatedContent = existingContent + "\n" + row;
+  const encodedContent = btoa(updatedContent);
+
+  /* 2️⃣ Update file */
+  await fetch(apiUrl, {
+    method: "PUT",
+    headers: {
+      Authorization: `Bearer ${GITHUB_TOKEN}`,
+      Accept: "application/vnd.github+json",
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({
+      message: "Add location entry",
+      content: encodedContent,
+      sha: fileData.sha,
+      branch: BRANCH
+    })
+  });
+
+  alert("✅ Data saved to GitHub CSV");
+}
+</script>
+
+</body>
+</html>
